@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Users, Phone, Send, Plus, X, Edit2, Trash2, Sparkles, Copy, Check, CheckSquare, MessageSquare, Search, Calendar, Building2, Mail, MapPin, User, ChevronDown, Loader2, AlertCircle, Pin, PinOff, Download, Clock, TrendingUp, FileText, ArrowRight, Globe, ExternalLink, Upload, Trophy, XCircle, Briefcase, StickyNote } from 'lucide-react';
+import { LayoutDashboard, Users, Phone, Send, Plus, X, Edit2, Trash2, Sparkles, Copy, Check, CheckSquare, MessageSquare, Search, Calendar, Building2, Mail, MapPin, User, ChevronDown, ChevronUp, Loader2, AlertCircle, Pin, PinOff, Download, Clock, TrendingUp, FileText, ArrowRight, Globe, ExternalLink, Upload, Trophy, XCircle, Briefcase, StickyNote } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // localStorage shim — replaces window.storage for standalone web deployment.
@@ -1833,6 +1833,17 @@ function PoliciesEditor({ policies, onChange }) {
   const removePolicy = (id) => {
     onChange(policies.filter(p => p.id !== id));
   };
+  // Reorder: move a policy to a new 0-based index. Array order IS the saved order (and the backup order).
+  const movePolicyTo = (id, newIndex) => {
+    const from = policies.findIndex(p => p.id === id);
+    if (from < 0) return;
+    const to = Math.max(0, Math.min(policies.length - 1, newIndex));
+    if (to === from) return;
+    const next = [...policies];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onChange(next);
+  };
 
   const total = policyTotal(policies);
 
@@ -1850,7 +1861,7 @@ function PoliciesEditor({ policies, onChange }) {
       )}
 
       <div style={{display:'flex', flexDirection:'column', gap:8}}>
-        {policies.map(pol => (
+        {policies.map((pol, idx) => (
           <div key={pol.id} style={{padding:10, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, display:'flex', flexDirection:'column', gap:6}}>
             <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'flex-end'}}>
               <div style={{flex:'2 1 140px', minWidth:120}}>
@@ -1915,6 +1926,35 @@ function PoliciesEditor({ policies, onChange }) {
                   <option value={11}>11 mo</option>
                   <option value={12}>12 mo</option>
                 </select>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:2, alignSelf:'center'}}>
+                <button
+                  onClick={() => movePolicyTo(pol.id, idx - 1)}
+                  disabled={idx === 0}
+                  style={{...styles.iconBtn, opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer'}}
+                  title="Move up"
+                >
+                  <ChevronUp size={14}/>
+                </button>
+                <input
+                  key={`${pol.id}-${idx}`}
+                  type="number"
+                  min={1}
+                  max={policies.length}
+                  defaultValue={idx + 1}
+                  onBlur={e => { const n = parseInt(e.target.value, 10); if (!isNaN(n)) movePolicyTo(pol.id, n - 1); }}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                  style={{...styles.input, width:44, padding:'4px 2px', fontSize:12, textAlign:'center'}}
+                  title="Position in list — type a number to jump"
+                />
+                <button
+                  onClick={() => movePolicyTo(pol.id, idx + 1)}
+                  disabled={idx === policies.length - 1}
+                  style={{...styles.iconBtn, opacity: idx === policies.length - 1 ? 0.3 : 1, cursor: idx === policies.length - 1 ? 'default' : 'pointer'}}
+                  title="Move down"
+                >
+                  <ChevronDown size={14}/>
+                </button>
               </div>
               <button
                 onClick={() => removePolicy(pol.id)}
