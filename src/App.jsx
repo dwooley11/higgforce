@@ -2000,11 +2000,12 @@ function BookOfBusiness({ accounts, onSelect }) {
   const [search, setSearch] = useState('');
   const [industryFilter, setIndustryFilter] = useState('All');
   const [sortBy, setSortBy] = useState('revenue'); // revenue | name | renewal
+  const [segmentFilter, setSegmentFilter] = useState('All'); // All | Commercial | Select | Personal
 
   const currentYear = new Date().getFullYear();
 
   // Compute per-account stats
-  const accountsWithStats = accounts.map(p => {
+  const baseStats = accounts.map(p => {
     const policies = p.policies || [];
     const totalRev = policyTotal(policies);
     const newBizRev = policies.filter(isNewBusinessThisYear).reduce((s, x) => s + (Number(x.revenue) || 0), 0);
@@ -2038,8 +2039,31 @@ function BookOfBusiness({ accounts, onSelect }) {
     return { ...p, _totalRev: totalRev, _newBizRev: newBizRev, _renewalRev: renewalRev, _upcomingRenewal: upcomingRenewal };
   });
 
-  // Apply search / industry filter
+  // Tag each account Commercial / Select / Personal (same rule as the summary cards):
+  // Personal Lines industry = Personal. Otherwise accounts sharing a contact are combined;
+  // combined revenue of $3,000+ = Commercial, else Select. No-contact accounts are judged alone.
+  const groupTotals = {};
+  baseStats.forEach(a => {
+    if (a.industry === 'Personal Lines') return;
+    const key = (a.contact || '').trim().toLowerCase();
+    if (key) groupTotals[key] = (groupTotals[key] || 0) + a._totalRev;
+  });
+  const accountsWithStats = baseStats.map(a => {
+    let segment;
+    if (a.industry === 'Personal Lines') segment = 'Personal';
+    else {
+      const key = (a.contact || '').trim().toLowerCase();
+      const rev = key ? groupTotals[key] : a._totalRev;
+      segment = rev >= 3000 ? 'Commercial' : 'Select';
+    }
+    return { ...a, _segment: segment };
+  });
+  const segmentCounts = { All: accountsWithStats.length, Commercial: 0, Select: 0, Personal: 0 };
+  accountsWithStats.forEach(a => { segmentCounts[a._segment]++; });
+
+  // Apply search / industry / segment filter
   const filtered = accountsWithStats.filter(p => {
+    if (segmentFilter !== 'All' && p._segment !== segmentFilter) return false;
     const indMatch = industryFilter === 'All' || p.industry === industryFilter;
     const q = search.toLowerCase();
     const sMatch = !q || p.company.toLowerCase().includes(q) || (p.contact||'').toLowerCase().includes(q);
@@ -2106,11 +2130,12 @@ function BookOfBusiness({ accounts, onSelect }) {
         <button onClick={() => downloadCSV(`book-of-business-${new Date().toISOString().slice(0,10)}.csv`,
           sorted.flatMap(p => {
             if (!p.policies || p.policies.length === 0) {
-              return [{ company: p.company, industry: p.industry, policy: '', revenue: 0, effective_date: '', new_or_renewal: '' }];
+              return [{ company: p.company, industry: p.industry, segment: p._segment, policy: '', revenue: 0, effective_date: '', new_or_renewal: '' }];
             }
             return p.policies.map(pol => ({
               company: p.company,
               industry: p.industry,
+              segment: p._segment,
               policy: pol.name,
               revenue: pol.revenue,
               effective_date: pol.effectiveDate,
@@ -2150,6 +2175,27 @@ function BookOfBusiness({ accounts, onSelect }) {
           <div style={{fontSize:11, color:'#15803d', textTransform:'uppercase', letterSpacing:0.5, fontWeight:600, marginBottom:6}}>Personal Lines</div>
           <div style={{fontSize:28, fontWeight:700, color:'#14532d', fontFamily:'Georgia, serif'}}>{formatMoney(personalLinesRev)}</div>
         </div>
+      </div>
+
+      {/* Segment toggle */}
+      <div style={{display:'flex', gap:6, flexWrap:'wrap', marginBottom:12}}>
+        {['All','Commercial','Select','Personal'].map(seg => {
+          const active = segmentFilter === seg;
+          return (
+            <button
+              key={seg}
+              onClick={() => setSegmentFilter(seg)}
+              style={{
+                padding:'6px 14px', borderRadius:999, fontSize:13, fontWeight:600, cursor:'pointer',
+                border: active ? '1px solid #15803d' : '1px solid #cbd5e1',
+                background: active ? '#15803d' : '#fff',
+                color: active ? '#fff' : '#334155'
+              }}
+            >
+              {seg === 'All' ? 'All' : seg + ' Lines'} ({segmentCounts[seg]})
+            </button>
+          );
+        })}
       </div>
 
       <div className="filter-bar" style={styles.filterBar}>
